@@ -1,0 +1,573 @@
+<html><head><base href="." target="_self">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<title>TikTube App</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+<script src="https://apis.google.com/js/api.js"></script>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    background: #000;
+    color: #fff;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-container {
+    height: 100vh;
+    position: relative;
+}
+
+@media (display-mode: standalone) {
+  .app-container {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+.video-container {
+    height: 100vh;
+    width: 100%;
+    position: relative;
+    scroll-snap-type: y mandatory;
+    overflow-y: scroll;
+    overflow-x: hidden;
+}
+
+.video-item {
+    height: 100vh;
+    width: 100%;
+    position: relative;
+    scroll-snap-align: start;
+}
+
+#player {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    picture-in-picture: allow;
+}
+
+.overlay {
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
+    padding: 20px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.7));
+}
+
+.search-container {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    z-index: 100;
+    width: 80%;
+    margin: 0 auto;
+}
+
+.search-input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 20px;
+    border: none;
+    background: rgba(255,255,255,0.2);
+    color: white;
+}
+
+.search-btn {
+    padding: 10px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.search-btn:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.username {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.description {
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.music-info {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.music-icon {
+    animation: spin 4s linear infinite;
+}
+
+.nav-buttons {
+    position: static;
+    width: auto;
+    display: flex;
+    gap: 20px;
+    transform: none;
+    padding: 0;
+}
+
+.nav-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.nav-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.volume-control {
+    position: absolute;
+    left: 15px;
+    bottom: 20px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    z-index: 100;
+}
+
+.volume-slider {
+    writing-mode: bt-lr;
+    -webkit-appearance: slider-horizontal;
+    width: 100px;
+    height: 8px;
+    background: rgba(255,255,255,0.2);
+    display: none;
+    transform: none;
+}
+
+.volume-btn:hover + .volume-slider,
+.volume-slider:hover {
+    display: block;
+}
+
+.volume-btn {
+    background: rgba(255,255,255,0.2);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.zoom-control {
+    display: none;
+}
+
+.video-controls {
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    z-index: 100;
+    padding: 0 20px;
+}
+
+.app-container:-webkit-full-screen {
+  width: 100vw;
+  height: 100vh;
+  background: black;
+}
+
+.app-container:-moz-full-screen {
+  width: 100vw;
+  height: 100vh;
+  background: black;
+}
+
+.app-container:-ms-fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: black;
+}
+
+.app-container:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: black;
+}
+</style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="search-container">
+        <input type="text" class="search-input" placeholder="Buscar videos...">
+        <button class="search-btn">🔍</button>
+    </div>
+    
+    <div class="video-container" id="videoContainer">
+        <div class="video-item">
+            <div id="player"></div>
+            <div class="overlay">
+                <div class="username">@usuario</div>
+                <div class="description">Descripci&#xf3;n del video #hashtag</div>
+                <div class="music-info">
+                    <span class="music-icon">&#x1f3b5;</span>
+                    <span>Nombre de la canci&#xf3;n - Artista</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="video-controls">
+        <div class="volume-control">
+            <button class="volume-btn">&#x1f50a;</button>
+            <input type="range" class="volume-slider" min="0" max="100" value="100">
+        </div>
+        
+        <div class="nav-buttons">
+            <button class="nav-btn" id="prevVideo">&#x2b05;&#xfe0f;</button>
+            <button class="nav-btn" id="nextVideo">&#x27a1;&#xfe0f;</button>
+        </div>
+
+        <div class="zoom-control">
+            <button class="zoom-btn">&#x1f50d;</button>
+        </div>
+    </div>
+</div>
+
+<script>
+window.addEventListener('offline', function (e) {
+  console.log('offline');
+  const offlineMsg = document.createElement('div');
+  offlineMsg.style.position = 'fixed';
+  offlineMsg.style.top = '10px';
+  offlineMsg.style.left = '50%';
+  offlineMsg.style.transform = 'translateX(-50%)';
+  offlineMsg.style.background = 'rgba(255,0,0,0.8)';
+  offlineMsg.style.padding = '10px';
+  offlineMsg.style.borderRadius = '5px';
+  offlineMsg.textContent = 'You are offline. Some features may not work.';
+  document.body.appendChild(offlineMsg);
+});
+window.addEventListener('online', function (e) {
+  console.log('online');
+  const offlineMsg = document.querySelector('.offline-message');
+  if (offlineMsg) {
+    offlineMsg.remove();
+  }
+  initYouTubeAPI();
+});
+const API_KEY = 'AIzaSyAoqrXtPPBy7Rph9nIxFDkzr3HQzkAI2kk';
+let currentVideoIndex = 0;
+let videos = [];
+function initYouTubeAPI() {
+  gapi.load('client', function () {
+    gapi.client.init({
+      'apiKey': API_KEY,
+      'discoveryDocs': ['https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest']
+    }).then(function () {
+      console.log('YouTube API initialized');
+      searchVideos('música popular');
+    }).catch(function (error) {
+      console.error('Error initializing YouTube API:', error);
+      showError('Error loading videos. Please check your internet connection.');
+    });
+  });
+}
+function showError(message) {
+  const errorMsg = document.createElement('div');
+  errorMsg.style.position = 'fixed';
+  errorMsg.style.top = '50%';
+  errorMsg.style.left = '50%';
+  errorMsg.style.transform = 'translate(-50%, -50%)';
+  errorMsg.style.background = 'rgba(255,0,0,0.8)';
+  errorMsg.style.padding = '20px';
+  errorMsg.style.borderRadius = '10px';
+  errorMsg.style.zIndex = '1000';
+  errorMsg.textContent = message;
+  document.body.appendChild(errorMsg);
+  setTimeout(() => {
+    errorMsg.remove();
+  }, 5000);
+}
+window.addEventListener('load', function () {
+  if (typeof gapi !== 'undefined') {
+    initYouTubeAPI();
+  } else {
+    showError('YouTube API failed to load. Please refresh the page.');
+  }
+});
+function searchVideos(query) {
+  if (!gapi.client.youtube) {
+    showError('YouTube API is not initialized. Please refresh the page.');
+    return;
+  }
+  return gapi.client.youtube.search.list({
+    'part': 'snippet',
+    'q': query,
+    'maxResults': 50,
+    'type': 'video',
+    'videoDuration': 'short',
+    'videoCaption': 'closedCaption'
+  }).then(function (response) {
+    if (response.result && response.result.items && response.result.items.length > 0) {
+      videos = response.result.items;
+      loadVideo(0);
+      updateVideoInfo(0);
+    } else {
+      showError('No videos found. Try a different search term.');
+    }
+  }).catch(function (error) {
+    console.error('Error searching videos:', error);
+    showError('Error searching videos. Please try again.');
+  });
+}
+function updateVideoInfo(index) {
+  if (videos[index]) {
+    const video = videos[index];
+    document.querySelector('.username').textContent = '@' + video.snippet.channelTitle;
+    document.querySelector('.description').textContent = video.snippet.title;
+    document.querySelector('.music-info span:last-child').textContent = video.snippet.channelTitle;
+  }
+}
+let player;
+function onYouTubeIframeAPIReady() {
+  player = new YT.Player('player', {
+    height: '100%',
+    width: '100%',
+    videoId: '',
+    playerVars: {
+      'autoplay': 1,
+      'controls': 0,
+      'showinfo': 0,
+      'modestbranding': 1,
+      'loop': 1,
+      'fs': 0,
+      'cc_load_policy': 0,
+      'iv_load_policy': 3,
+      'autohide': 0,
+      'cc_lang_pref': 'es',
+      'hl': 'es',
+      'playsinline': 1,
+      'allowfullscreen': true
+    },
+    events: {
+      'onReady': onPlayerReady,
+      'onStateChange': onPlayerStateChange
+    }
+  });
+  if (document.pictureInPictureEnabled) {
+    const pipButton = document.createElement('button');
+    pipButton.innerHTML = '📺';
+    pipButton.className = 'volume-btn';
+    pipButton.style.margin = '0';
+    const videoControls = document.querySelector('.video-controls');
+    videoControls.appendChild(pipButton);
+    
+    pipButton.addEventListener('click', async () => {
+      toggleFullscreen();
+    });
+
+    pipButton.addEventListener('dblclick', async () => {
+      try {
+        if (document.pictureInPictureElement) {
+          await document.exitPictureInPicture();
+        } else {
+          const playerElement = document.querySelector('#player');
+          if (playerElement) {
+            await playerElement.requestPictureInPicture();
+          }
+        }
+      } catch (err) {
+        console.error('Failed to enter Picture-in-Picture mode:', err);
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && player && !document.pictureInPictureElement) {
+        const playerElement = document.querySelector('#player');
+        if (playerElement) {
+          playerElement.requestPictureInPicture().catch(console.error);
+        }
+      }
+    });
+  }
+}
+function toggleFullscreen() {
+  const container = document.querySelector('.app-container');
+  
+  if (!document.fullscreenElement) {
+    if (container.requestFullscreen) {
+      container.requestFullscreen();
+    } else if (container.webkitRequestFullscreen) { 
+      container.webkitRequestFullscreen();
+    } else if (container.msRequestFullscreen) { 
+      container.msRequestFullscreen();
+    }
+  } else {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else if (document.webkitExitFullscreen) { 
+      document.webkitExitFullscreen();
+    } else if (document.msExitFullscreen) { 
+      document.msExitFullscreen();
+    }
+  }
+}
+function onPlayerReady(event) {
+  event.target.playVideo();
+}
+function onPlayerStateChange(event) {
+  if (event.data === YT.PlayerState.ENDED) {
+    loadNextVideo();
+  }
+}
+function loadVideo(index) {
+  if (!videos || !videos[index]) {
+    showError('No video available to play.');
+    return;
+  }
+  try {
+    if ('wakeLock' in navigator) {
+      navigator.wakeLock.request('screen').catch(err => {
+        console.log(`Wake Lock error: ${err.name}, ${err.message}`);
+      });
+    }
+    if (player && typeof player.loadVideoById === 'function') {
+      player.loadVideoById(videos[index].id.videoId);
+      updateVideoInfo(index);
+    } else {
+      showError('Video player is not ready. Please refresh the page.');
+    }
+  } catch (error) {
+    console.error('Error loading video:', error);
+    showError('Error loading video. Please try again.');
+  }
+}
+function loadNextVideo() {
+  currentVideoIndex = (currentVideoIndex + 1) % videos.length;
+  loadVideo(currentVideoIndex);
+}
+let touchStartY = 0;
+let touchEndY = 0;
+document.addEventListener('touchstart', e => {
+  touchStartY = e.touches[0].clientY;
+});
+document.addEventListener('touchend', e => {
+  touchEndY = e.changedTouches[0].clientY;
+  handleSwipe();
+});
+function handleSwipe() {
+  if (Math.abs(touchStartY - touchEndY) > 50) {
+    if (touchStartY < touchEndY) {
+      loadNextVideo();
+    } else {
+      loadVideo(currentVideoIndex - 1);
+    }
+  }
+}
+document.querySelector('.search-btn').addEventListener('click', () => {
+  const query = document.querySelector('.search-input').value;
+  if (query) {
+    searchVideos(query);
+  }
+});
+document.querySelector('.search-input').addEventListener('keypress', e => {
+  if (e.key === 'Enter') {
+    const query = e.target.value;
+    if (query) {
+      searchVideos(query);
+    }
+  }
+});
+document.getElementById('prevVideo').addEventListener('click', () => {
+  currentVideoIndex = (currentVideoIndex - 1 + videos.length) % videos.length;
+  loadVideo(currentVideoIndex);
+});
+document.getElementById('nextVideo').addEventListener('click', () => {
+  currentVideoIndex = (currentVideoIndex + 1) % videos.length;
+  loadVideo(currentVideoIndex);
+});
+const volumeBtn = document.querySelector('.volume-btn');
+const volumeSlider = document.querySelector('.volume-slider');
+let isMuted = false;
+volumeBtn.addEventListener('click', () => {
+  isMuted = !isMuted;
+  if (player) {
+    if (isMuted) {
+      player.mute();
+      volumeBtn.textContent = '🔇';
+    } else {
+      player.unMute();
+      player.setVolume(volumeSlider.value);
+      volumeBtn.textContent = '🔊';
+    }
+  }
+});
+volumeSlider.addEventListener('input', e => {
+  if (player) {
+    const volume = e.target.value;
+    player.setVolume(volume);
+    if (volume === '0') {
+      volumeBtn.textContent = '🔇';
+    } else {
+      volumeBtn.textContent = '🔊';
+    }
+  }
+});
+const zoomBtn = document.querySelector('.zoom-btn');
+zoomBtn.addEventListener('click', () => {});
+if ('serviceWorker' in navigator) {}
+</script>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+</body></html>
